@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Previsão de Pesca Pro</title>
+<title>IA Pesca Pro</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
@@ -13,7 +13,7 @@
 body{
 margin:0;
 font-family:Arial;
-background:#071b2b;
+background:#061825;
 color:white;
 text-align:center;
 }
@@ -25,12 +25,14 @@ font-size:26px;
 }
 
 .container{
-padding:15px;
+max-width:900px;
+margin:auto;
+padding:10px;
 }
 
 .card{
 background:#103d5c;
-margin:10px;
+margin:10px 0;
 padding:15px;
 border-radius:10px;
 }
@@ -40,30 +42,16 @@ height:300px;
 border-radius:10px;
 }
 
-.forecast{
+.species{
 display:grid;
-grid-template-columns:repeat(7,1fr);
-gap:8px;
+grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+gap:10px;
 }
 
-.day{
+.sp{
 background:#0f2f47;
 padding:10px;
 border-radius:8px;
-}
-
-.result{
-font-size:28px;
-margin-top:10px;
-}
-
-button{
-padding:10px 20px;
-background:#28a745;
-border:none;
-border-radius:6px;
-color:white;
-font-size:16px;
 }
 
 </style>
@@ -72,42 +60,52 @@ font-size:16px;
 <body>
 
 <header>
-🎣 Previsão Inteligente de Pesca
+🎣 IA Previsão de Pesca Pro
 </header>
 
 <div class="container">
 
 <div class="card">
-<h3>Localização</h3>
-<p id="location">Detectando...</p>
+<h3>📍 Localização</h3>
+<p id="loc"></p>
 </div>
 
 <div class="card">
-<h3>Mapa</h3>
+<h3>🗺 Mapa de pesca</h3>
 <div id="map"></div>
 </div>
 
 <div class="card">
-<h3>Clima atual</h3>
+<h3>🌤 Clima</h3>
 <p id="weather"></p>
 </div>
 
 <div class="card">
-<h3>Fase da Lua</h3>
-<p id="moon"></p>
+<h3>🌡 Pressão atmosférica</h3>
+<p id="pressure"></p>
 </div>
 
 <div class="card">
-<h3>Atividade do peixe</h3>
-<div id="activity" class="result">---</div>
+<h3>🌅 Sol</h3>
+<p id="sun"></p>
 </div>
 
 <div class="card">
-<h3>Previsão próximos dias</h3>
-<div id="forecast" class="forecast"></div>
+<h3>🤖 IA atividade por peixe</h3>
+
+<div class="species">
+
+<div class="sp">Tilápia<br><span id="tilapia"></span></div>
+
+<div class="sp">Pacu<br><span id="pacu"></span></div>
+
+<div class="sp">Piau<br><span id="piau"></span></div>
+
+<div class="sp">Matrinxã<br><span id="matrinxa"></span></div>
+
 </div>
 
-<button onclick="init()">Atualizar</button>
+</div>
 
 </div>
 
@@ -115,39 +113,40 @@ font-size:16px;
 
 <script>
 
-function init(){
+let map
 
-navigator.geolocation.getCurrentPosition(function(pos){
+navigator.geolocation.getCurrentPosition(pos=>{
 
-let lat = pos.coords.latitude
-let lon = pos.coords.longitude
+let lat=pos.coords.latitude
+let lon=pos.coords.longitude
 
-document.getElementById("location").innerHTML =
+document.getElementById("loc").innerHTML=
 lat.toFixed(3)+" , "+lon.toFixed(3)
 
 createMap(lat,lon)
 
 getWeather(lat,lon)
 
-getForecast(lat,lon)
-
-getMoon()
+getSun(lat,lon)
 
 })
 
-}
-
 function createMap(lat,lon){
 
-let map = L.map("map").setView([lat,lon],13)
+map=L.map("map").setView([lat,lon],13)
 
 L.tileLayer(
 "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 ).addTo(map)
 
-L.marker([lat,lon])
-.addTo(map)
-.bindPopup("Seu ponto de pesca 🎣")
+L.marker([lat,lon]).addTo(map)
+.bindPopup("Seu local 🎣")
+
+L.marker([lat+0.02,lon]).addTo(map)
+.bindPopup("Estrutura boa")
+
+L.marker([lat-0.015,lon+0.01]).addTo(map)
+.bindPopup("Galhadas")
 
 }
 
@@ -161,90 +160,76 @@ let t=data.current_weather.temperature
 let w=data.current_weather.windspeed
 
 document.getElementById("weather").innerHTML=
-"Temperatura "+t+"°C<br>Vento "+w+" km/h"
+`${t}°C | vento ${w} km/h`
 
-calcFishing(t,w)
+let pressure=data.current_weather.surface_pressure || 1013
+
+document.getElementById("pressure").innerHTML=
+pressure+" hPa"
+
+fishAI(t,w,pressure)
 
 })
 
 }
 
-function calcFishing(temp,wind){
+function getSun(lat,lon){
 
-let score=50
-
-if(temp>20 && temp<30) score+=20
-if(wind<10) score+=15
-if(wind>25) score-=20
-
-let text=""
-
-if(score>80) text="🔥 EXTREMAMENTE ALTA"
-else if(score>65) text="🟢 ALTA"
-else if(score>45) text="🟡 MODERADA"
-else if(score>25) text="🟠 BAIXA"
-else text="🔴 EXTREMAMENTE BAIXA"
-
-document.getElementById("activity").innerHTML=text
-
-}
-
-function getForecast(lat,lon){
-
-fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max&timezone=auto`)
+fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=sunrise,sunset&timezone=auto`)
 .then(r=>r.json())
 .then(data=>{
 
-let days=data.daily.time
-let temps=data.daily.temperature_2m_max
+let sr=new Date(data.daily.sunrise[0])
+let ss=new Date(data.daily.sunset[0])
 
-let html=""
-
-for(let i=0;i<7;i++){
-
-html+=`
-<div class="day">
-${days[i]}<br>
-🌡 ${temps[i]}°C
-</div>
-`
-
-}
-
-document.getElementById("forecast").innerHTML=html
+document.getElementById("sun").innerHTML=
+"Nascer "+sr.getHours()+":"+sr.getMinutes()+"<br>Pôr "+ss.getHours()+":"+ss.getMinutes()
 
 })
 
 }
 
-function getMoon(){
+function fishAI(temp,wind,pressure){
 
-let today=new Date()
+function score(){
 
-let lp=2551443
+let s=50
 
-let new_moon=new Date(1970,0,7,20,35,0)
+if(temp>22 && temp<30) s+=20
 
-let phase=((today.getTime()-new_moon.getTime())/1000)%lp
+if(wind<10) s+=10
 
-let moon=Math.floor((phase/lp)*8)
+if(pressure>1010 && pressure<1025) s+=15
 
-let phases=[
-"LUA NOVA 🌑",
-"CRESCENTE 🌒",
-"CRESCENTE 🌓",
-"CRESCENTE 🌔",
-"LUA CHEIA 🌕",
-"MINGUANTE 🌖",
-"MINGUANTE 🌗",
-"MINGUANTE 🌘"
-]
-
-document.getElementById("moon").innerHTML=phases[moon]
+return s
 
 }
 
-init()
+let base=score()
+
+document.getElementById("tilapia").innerHTML=level(base+5)
+
+document.getElementById("pacu").innerHTML=level(base)
+
+document.getElementById("piau").innerHTML=level(base+3)
+
+document.getElementById("matrinxa").innerHTML=level(base-5)
+
+}
+
+function level(s){
+
+if(s>80) return "🔥 Muito alta"
+
+if(s>65) return "🟢 Alta"
+
+if(s>50) return "🟡 Média"
+
+if(s>35) return "🟠 Baixa"
+
+return "🔴 Fraca"
+
+}
 
 </script>
 
