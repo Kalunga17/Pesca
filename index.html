@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Previsão de Pesca Pro</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:#071b2b;
+color:white;
+text-align:center;
+}
+
+header{
+background:#0c3b5e;
+padding:20px;
+font-size:26px;
+}
+
+.container{
+padding:15px;
+}
+
+.card{
+background:#103d5c;
+margin:10px;
+padding:15px;
+border-radius:10px;
+}
+
+#map{
+height:300px;
+border-radius:10px;
+}
+
+.forecast{
+display:grid;
+grid-template-columns:repeat(7,1fr);
+gap:8px;
+}
+
+.day{
+background:#0f2f47;
+padding:10px;
+border-radius:8px;
+}
+
+.result{
+font-size:28px;
+margin-top:10px;
+}
+
+button{
+padding:10px 20px;
+background:#28a745;
+border:none;
+border-radius:6px;
+color:white;
+font-size:16px;
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+🎣 Previsão Inteligente de Pesca
+</header>
+
+<div class="container">
+
+<div class="card">
+<h3>Localização</h3>
+<p id="location">Detectando...</p>
+</div>
+
+<div class="card">
+<h3>Mapa</h3>
+<div id="map"></div>
+</div>
+
+<div class="card">
+<h3>Clima atual</h3>
+<p id="weather"></p>
+</div>
+
+<div class="card">
+<h3>Fase da Lua</h3>
+<p id="moon"></p>
+</div>
+
+<div class="card">
+<h3>Atividade do peixe</h3>
+<div id="activity" class="result">---</div>
+</div>
+
+<div class="card">
+<h3>Previsão próximos dias</h3>
+<div id="forecast" class="forecast"></div>
+</div>
+
+<button onclick="init()">Atualizar</button>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+function init(){
+
+navigator.geolocation.getCurrentPosition(function(pos){
+
+let lat = pos.coords.latitude
+let lon = pos.coords.longitude
+
+document.getElementById("location").innerHTML =
+lat.toFixed(3)+" , "+lon.toFixed(3)
+
+createMap(lat,lon)
+
+getWeather(lat,lon)
+
+getForecast(lat,lon)
+
+getMoon()
+
+})
+
+}
+
+function createMap(lat,lon){
+
+let map = L.map("map").setView([lat,lon],13)
+
+L.tileLayer(
+"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+).addTo(map)
+
+L.marker([lat,lon])
+.addTo(map)
+.bindPopup("Seu ponto de pesca 🎣")
+
+}
+
+function getWeather(lat,lon){
+
+fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`)
+.then(r=>r.json())
+.then(data=>{
+
+let t=data.current_weather.temperature
+let w=data.current_weather.windspeed
+
+document.getElementById("weather").innerHTML=
+"Temperatura "+t+"°C<br>Vento "+w+" km/h"
+
+calcFishing(t,w)
+
+})
+
+}
+
+function calcFishing(temp,wind){
+
+let score=50
+
+if(temp>20 && temp<30) score+=20
+if(wind<10) score+=15
+if(wind>25) score-=20
+
+let text=""
+
+if(score>80) text="🔥 EXTREMAMENTE ALTA"
+else if(score>65) text="🟢 ALTA"
+else if(score>45) text="🟡 MODERADA"
+else if(score>25) text="🟠 BAIXA"
+else text="🔴 EXTREMAMENTE BAIXA"
+
+document.getElementById("activity").innerHTML=text
+
+}
+
+function getForecast(lat,lon){
+
+fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max&timezone=auto`)
+.then(r=>r.json())
+.then(data=>{
+
+let days=data.daily.time
+let temps=data.daily.temperature_2m_max
+
+let html=""
+
+for(let i=0;i<7;i++){
+
+html+=`
+<div class="day">
+${days[i]}<br>
+🌡 ${temps[i]}°C
+</div>
+`
+
+}
+
+document.getElementById("forecast").innerHTML=html
+
+})
+
+}
+
+function getMoon(){
+
+let today=new Date()
+
+let lp=2551443
+
+let new_moon=new Date(1970,0,7,20,35,0)
+
+let phase=((today.getTime()-new_moon.getTime())/1000)%lp
+
+let moon=Math.floor((phase/lp)*8)
+
+let phases=[
+"LUA NOVA 🌑",
+"CRESCENTE 🌒",
+"CRESCENTE 🌓",
+"CRESCENTE 🌔",
+"LUA CHEIA 🌕",
+"MINGUANTE 🌖",
+"MINGUANTE 🌗",
+"MINGUANTE 🌘"
+]
+
+document.getElementById("moon").innerHTML=phases[moon]
+
+}
+
+init()
+
+</script>
+
+</body>
+</html>
